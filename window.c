@@ -1298,6 +1298,9 @@ window_pane_find_up(struct window_pane *wp)
 	w = wp->window;
 	status = options_get_number(w->options, "pane-border-status");
 
+	if(wp->yoff <= (status == PANE_STATUS_TOP))
+		return (NULL);
+
 	list = NULL;
 	size = 0;
 
@@ -1354,6 +1357,9 @@ window_pane_find_down(struct window_pane *wp)
 		return (NULL);
 	w = wp->window;
 	status = options_get_number(w->options, "pane-border-status");
+
+	if(wp->yoff + wp->sy + (status == PANE_STATUS_BOTTOM)>= w->sy)
+		return (NULL);
 
 	list = NULL;
 	size = 0;
@@ -1416,7 +1422,8 @@ window_pane_find_left(struct window_pane *wp)
 
 	edge = wp->xoff;
 	if (edge == 0)
-		edge = w->sx + 1;
+		return (NULL);
+		/* edge = w->sx + 1; */
 
 	top = wp->yoff;
 	bottom = wp->yoff + wp->sy;
@@ -1464,7 +1471,8 @@ window_pane_find_right(struct window_pane *wp)
 
 	edge = wp->xoff + wp->sx + 1;
 	if (edge >= w->sx)
-		edge = 0;
+		return (NULL);
+		/* edge = 0; */
 
 	top = wp->yoff;
 	bottom = wp->yoff + wp->sy;
