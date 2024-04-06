@@ -308,12 +308,12 @@ screen_resize_cursor(struct screen *s, u_int sx, u_int sy, int reflow,
 	if (sy != screen_size_y(s))
 		screen_resize_y(s, sy, eat_empty, &cy);
 
-	if (reflow) {
 #ifdef ENABLE_SIXEL
-		image_free_all(s);
+	image_free_all(s);
 #endif
+
+	if (reflow)
 		screen_reflow(s, sx, &cx, &cy, cursor);
-	}
 
 	if (cy >= s->grid->hsize) {
 		s->cx = cx;
@@ -400,7 +400,7 @@ screen_resize_y(struct screen *s, u_int sy, int eat_empty, u_int *cy)
 
 		/*
 		 * Try to pull as much as possible out of scrolled history, if
-		 * is is enabled.
+		 * it is enabled.
 		 */
 		available = gd->hscrolled;
 		if (gd->flags & GRID_HISTORY && available > 0) {
