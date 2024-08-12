@@ -1131,6 +1131,9 @@ struct window_pane {
 	int		 border_gc_set;
 	struct grid_cell border_gc;
 
+	int		 control_bg;
+	int		 control_fg;
+
 	TAILQ_ENTRY(window_pane) entry;  /* link in list of all panes */
 	TAILQ_ENTRY(window_pane) sentry; /* link in list of last visited */
 	RB_ENTRY(window_pane) tree_entry;
@@ -2451,6 +2454,8 @@ const struct utf8_data *tty_acs_rounded_borders(int);
 void		tty_keys_build(struct tty *);
 void		tty_keys_free(struct tty *);
 int		tty_keys_next(struct tty *);
+int		tty_keys_colours(struct tty *, const char *, size_t, size_t *,
+		     int *, int *);
 
 /* arguments.c */
 void		 args_set(struct args *, u_char, struct args_value *, int);
@@ -3182,7 +3187,7 @@ int	 mode_tree_set_current(struct mode_tree_data *, uint64_t);
 void	 mode_tree_each_tagged(struct mode_tree_data *, mode_tree_each_cb,
 	     struct client *, key_code, int);
 void	 mode_tree_up(struct mode_tree_data *, int);
-void	 mode_tree_down(struct mode_tree_data *, int);
+int	 mode_tree_down(struct mode_tree_data *, int);
 struct mode_tree_data *mode_tree_start(struct window_pane *, struct args *,
 	     mode_tree_build_cb, mode_tree_draw_cb, mode_tree_search_cb,
 	     mode_tree_menu_cb, mode_tree_height_cb, mode_tree_key_cb, void *,
@@ -3311,6 +3316,7 @@ void		 session_renumber_windows(struct session *);
 
 /* utf8.c */
 enum utf8_state	 utf8_towc (const struct utf8_data *, wchar_t *);
+enum utf8_state	 utf8_fromwc(wchar_t wc, struct utf8_data *);
 int		 utf8_in_table(wchar_t, const wchar_t *, u_int);
 utf8_char	 utf8_build_one(u_char);
 enum utf8_state	 utf8_from_data(const struct utf8_data *, utf8_char *);
