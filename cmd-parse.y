@@ -32,7 +32,7 @@
 
 static int			 yylex(void);
 static int			 yyparse(void);
-static int printflike(1,2)	 yyerror(const char *, ...);
+static void printflike(1,2)	 yyerror(const char *, ...);
 
 static char			*yylex_token(int);
 static char			*yylex_format(void);
@@ -849,7 +849,7 @@ cmd_parse_build_command(struct cmd_parse_command *cmd,
 		count++;
 	}
 
-	add = cmd_parse(values, count, pi->file, pi->line, &cause);
+	add = cmd_parse(values, count, pi->file, pi->line, pi->flags, &cause);
 	if (add == NULL) {
 		pr->status = CMD_PARSE_ERROR;
 		pr->error = cmd_parse_get_error(pi->file, pi->line, cause);
@@ -1127,7 +1127,7 @@ cmd_parse_from_arguments(struct args_value *values, u_int count,
 	return (&pr);
 }
 
-static int printflike(1, 2)
+static void printflike(1, 2)
 yyerror(const char *fmt, ...)
 {
 	struct cmd_parse_state	*ps = &parse_state;
@@ -1136,7 +1136,7 @@ yyerror(const char *fmt, ...)
 	char			*error;
 
 	if (ps->error != NULL)
-		return (0);
+		return;
 
 	va_start(ap, fmt);
 	xvasprintf(&error, fmt, ap);
@@ -1144,7 +1144,6 @@ yyerror(const char *fmt, ...)
 
 	ps->error = cmd_parse_get_error(pi->file, pi->line, error);
 	free(error);
-	return (0);
 }
 
 static int
@@ -1627,6 +1626,7 @@ yylex_token_tilde(char **buf, size_t *len)
 static char *
 yylex_token(int ch)
 {
+	struct cmd_parse_state	*ps = &parse_state;
 	char			*buf;
 	size_t			 len;
 	enum { START,
@@ -1650,9 +1650,12 @@ yylex_token(int ch)
 				ch = '\r';
 			}
 		}
-		if (state == NONE && ch == '\n') {
-			log_debug("%s: end at EOL", __func__);
-			break;
+		if (ch == '\n') {
+			if (state == NONE) {
+				log_debug("%s: end at EOL", __func__);
+				break;
+			}
+			ps->input->line++;
 		}
 
 		/* Whitespace or ; or } ends a token unless inside quotes. */

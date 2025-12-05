@@ -91,6 +91,7 @@ screen_init(struct screen *s, u_int sx, u_int sy, u_int hlimit)
 
 #ifdef ENABLE_SIXEL
 	TAILQ_INIT(&s->images);
+	TAILQ_INIT(&s->saved_images);
 #endif
 
 	s->write_list = NULL;
@@ -588,11 +589,17 @@ screen_select_cell(struct screen *s, struct grid_cell *dst,
 		return;
 
 	memcpy(dst, &s->sel->cell, sizeof *dst);
-
+	if (COLOUR_DEFAULT(dst->fg))
+		dst->fg = src->fg;
+	if (COLOUR_DEFAULT(dst->bg))
+		dst->bg = src->bg;
 	utf8_copy(&dst->data, &src->data);
-	dst->attr = dst->attr & ~GRID_ATTR_CHARSET;
-	dst->attr |= src->attr & GRID_ATTR_CHARSET;
 	dst->flags = src->flags;
+
+	if (dst->attr & GRID_ATTR_NOATTR)
+		dst->attr |= (src->attr & GRID_ATTR_CHARSET);
+	else
+		dst->attr |= src->attr;
 }
 
 /* Reflow wrapped lines. */
@@ -640,6 +647,10 @@ screen_alternate_on(struct screen *s, struct grid_cell *gc, int cursor)
 		s->saved_cy = s->cy;
 	}
 	memcpy(&s->saved_cell, gc, sizeof s->saved_cell);
+
+#ifdef ENABLE_SIXEL
+	TAILQ_CONCAT(&s->saved_images, &s->images, entry);
+#endif
 
 	grid_view_clear(s->grid, 0, 0, sx, sy, 8);
 
@@ -694,6 +705,11 @@ screen_alternate_off(struct screen *s, struct grid_cell *gc, int cursor)
 
 	grid_destroy(s->saved_grid);
 	s->saved_grid = NULL;
+
+#ifdef ENABLE_SIXEL
+	image_free_all(s);
+	TAILQ_CONCAT(&s->images, &s->saved_images, entry);
+#endif
 
 	if (s->cx > screen_size_x(s) - 1)
 		s->cx = screen_size_x(s) - 1;

@@ -35,7 +35,7 @@ const struct cmd_entry cmd_send_keys_entry = {
 
 	.args = { "c:FHKlMN:Rt:X", 0, -1, NULL },
 	.usage = "[-FHKlMRX] [-c target-client] [-N repeat-count] "
-	         CMD_TARGET_PANE_USAGE " key ...",
+	         CMD_TARGET_PANE_USAGE " [key ...]",
 
 	.target = { 't', CMD_FIND_PANE, 0 },
 
@@ -217,7 +217,7 @@ cmd_send_keys_exec(struct cmd *self, struct cmdq_item *item)
 	if (args_has(args, 'R')) {
 		colour_palette_clear(&wp->palette);
 		input_reset(wp->ictx, 1);
-		wp->flags |= (PANE_STYLECHANGED|PANE_REDRAW);
+		wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED|PANE_REDRAW);
 	}
 
 	if (count == 0) {

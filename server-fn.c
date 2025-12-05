@@ -20,6 +20,7 @@
 #include <sys/wait.h>
 #include <sys/uio.h>
 
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -287,6 +288,8 @@ server_link_window(struct session *src, struct winlink *srcwl,
 	if (dstwl == NULL)
 		return (-1);
 
+	if (marked_pane.wl == srcwl)
+		marked_pane.wl = dstwl;
 	if (selectflag)
 		session_select(dst, dstwl->idx);
 	server_redraw_session_group(dst);
@@ -318,6 +321,7 @@ server_destroy_pane(struct window_pane *wp, int notify)
 	if (wp->fd != -1) {
 #ifdef HAVE_UTEMPTER
 		utempter_remove_record(wp->fd);
+		kill(getpid(), SIGCHLD);
 #endif
 		bufferevent_free(wp->event);
 		wp->event = NULL;
@@ -402,7 +406,7 @@ server_find_session(struct session *s,
 	struct session *s_loop, *s_out = NULL;
 
 	RB_FOREACH(s_loop, sessions, &sessions) {
-		if (s_loop != s && (s_out == NULL || f(s_loop, s_out)))
+		if (s_loop != s && f(s_loop, s_out))
 			s_out = s_loop;
 	}
 	return (s_out);
@@ -411,6 +415,8 @@ server_find_session(struct session *s,
 static int
 server_newer_session(struct session *s_loop, struct session *s_out)
 {
+	if (s_out == NULL)
+		return (1);
 	return (timercmp(&s_loop->activity_time, &s_out->activity_time, >));
 }
 
@@ -426,7 +432,7 @@ void
 server_destroy_session(struct session *s)
 {
 	struct client	*c;
-	struct session	*s_new = NULL, *cs_new, *use_s;
+	struct session	*s_new = NULL, *cs_new = NULL, *use_s;
 	int		 detach_on_destroy;
 
 	detach_on_destroy = options_get_number(s->options, "detach-on-destroy");

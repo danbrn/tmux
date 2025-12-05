@@ -576,7 +576,6 @@ screen_write_fast_copy(struct screen_write_ctx *ctx, struct screen *src,
 	if (nx == 0 || ny == 0)
 		return;
 
-	cy = s->cy;
 	for (yy = py; yy < py + ny; yy++) {
 		if (yy >= gd->hsize + gd->sy)
 			break;
@@ -584,7 +583,8 @@ screen_write_fast_copy(struct screen_write_ctx *ctx, struct screen *src,
 		if (wp != NULL)
 			screen_write_initctx(ctx, &ttyctx, 0);
 		for (xx = px; xx < px + nx; xx++) {
-			if (xx >= grid_get_line(gd, yy)->cellsize)
+			if (xx >= grid_get_line(gd, yy)->cellsize &&
+			    s->cx >= grid_get_line(ctx->s->grid, s->cy)->cellsize)
 				break;
 			grid_get_cell(gd, xx, yy, &gc);
 			if (xx + gc.data.width > px + nx)
@@ -1872,9 +1872,13 @@ screen_write_collect_end(struct screen_write_ctx *ctx)
 			grid_view_set_cell(s->grid, xx, s->cy,
 			    &grid_default_cell);
 		}
-		if (gc.data.width > 1) {
-			grid_view_set_cell(s->grid, xx, s->cy,
-			    &grid_default_cell);
+		if (xx != s->cx) {
+			if (xx == 0)
+				grid_view_get_cell(s->grid, 0, s->cy, &gc);
+			if (gc.data.width > 1) {
+				grid_view_set_cell(s->grid, xx, s->cy,
+				    &grid_default_cell);
+			}
 		}
 	}
 
@@ -1992,7 +1996,7 @@ screen_write_cell(struct screen_write_ctx *ctx, const struct grid_cell *gc)
 		log_debug("%s: wrapped at %u,%u", __func__, s->cx, s->cy);
 		screen_write_linefeed(ctx, 1, 8);
 		screen_write_set_cursor(ctx, 0, -1);
-		screen_write_collect_flush(ctx, 1, __func__);
+		screen_write_collect_flush(ctx, 0, __func__);
 	}
 
 	/* Sanity check cursor position. */
@@ -2098,6 +2102,10 @@ screen_write_combine(struct screen_write_ctx *ctx, const struct grid_cell *gc)
 	struct tty_ctx		 ttyctx;
 	int			 force_wide = 0, zero_width = 0;
 
+	/* Ignore U+3164 HANGUL_FILLER entirely. */
+	if (utf8_is_hangul_filler(ud))
+		return (1);
+
 	/*
 	 * Is this character which makes no sense without being combined? If
 	 * this is true then flag it here and discard the character (return 1)
@@ -2105,9 +2113,11 @@ screen_write_combine(struct screen_write_ctx *ctx, const struct grid_cell *gc)
 	 */
 	if (utf8_is_zwj(ud))
 		zero_width = 1;
-	else if (utf8_is_vs(ud))
-		zero_width = force_wide = 1;
-	else if (ud->width == 0)
+	else if (utf8_is_vs(ud)) {
+		zero_width = 1;
+		if (options_get_number(global_options, "variation-selector-always-wide"))
+			force_wide = 1;
+	} else if (ud->width == 0)
 		zero_width = 1;
 
 	/* Cannot combine empty character or at left. */
@@ -2127,17 +2137,27 @@ screen_write_combine(struct screen_write_ctx *ctx, const struct grid_cell *gc)
 		return (zero_width);
 
 	/*
-	 * Check if we need to combine characters. This could be zero width
-	 * (set above), a modifier character (with an existing Unicode
-	 * character) or a previous ZWJ.
+	 * Check if we need to combine characters. This could be a Korean
+	 * Hangul Jamo character, zero width (set above), a modifier character
+	 * (with an existing Unicode character) or a previous ZWJ.
 	 */
 	if (!zero_width) {
-		if (utf8_is_modifier(ud)) {
-			if (last.data.size < 2)
-				return (0);
-			force_wide = 1;
-		} else if (!utf8_has_zwj(&last.data))
+		switch (hanguljamo_check_state(&last.data, ud)) {
+		case HANGULJAMO_STATE_NOT_COMPOSABLE:
+			return (1);
+		case HANGULJAMO_STATE_CHOSEONG:
 			return (0);
+		case HANGULJAMO_STATE_COMPOSABLE:
+			break;
+		case HANGULJAMO_STATE_NOT_HANGULJAMO:
+			if (utf8_should_combine(&last.data, ud))
+				force_wide = 1;
+			else if (utf8_should_combine(ud, &last.data))
+                               force_wide = 1;
+			else if (!utf8_has_zwj(&last.data))
+				return (0);
+			break;
+		}
 	}
 
 	/* Check if this combined character would be too long. */

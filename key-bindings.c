@@ -197,11 +197,12 @@ key_bindings_add(const char *name, key_code key, const char *note, int repeat,
 	bd = key_bindings_get(table, key & ~KEYC_MASK_FLAGS);
 	if (cmdlist == NULL) {
 		if (bd != NULL) {
-			free((void *)bd->note);
-			if (note != NULL)
+			if (note != NULL) {
+				free((void *)bd->note);
 				bd->note = xstrdup(note);
-			else
-				bd->note = NULL;
+			}
+			if (repeat)
+				bd->flags |= KEY_BINDING_REPEAT;
 		}
 		return;
 	}
@@ -433,8 +434,8 @@ key_bindings_init(void)
 		"bind -N 'Resize the pane right' -r C-Right { resize-pane -R }",
 
 		/* Menu keys */
-		"bind < { display-menu -xW -yW -T '#[align=centre]#{window_index}:#{window_name}' " DEFAULT_WINDOW_MENU " }",
-		"bind > { display-menu -xP -yP -T '#[align=centre]#{pane_index} (#{pane_id})' " DEFAULT_PANE_MENU " }",
+		"bind -N 'Display window menu' < { display-menu -xW -yW -T '#[align=centre]#{window_index}:#{window_name}' " DEFAULT_WINDOW_MENU " }",
+		"bind -N 'Display pane menu' > { display-menu -xP -yP -T '#[align=centre]#{pane_index} (#{pane_id})' " DEFAULT_PANE_MENU " }",
 
 		/* Mouse button 1 down on pane. */
 		"bind -n MouseDown1Pane { select-pane -t=; send -M }",
@@ -443,7 +444,7 @@ key_bindings_init(void)
 		"bind -n MouseDrag1Pane { if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send -M } { copy-mode -M } }",
 
 		/* Mouse wheel up on pane. */
-		"bind -n WheelUpPane { if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send -M } { copy-mode -e } }",
+		"bind -n WheelUpPane { if -F '#{||:#{alternate_on},#{pane_in_mode},#{mouse_any_flag}}' { send -M } { copy-mode -e } }",
 
 		/* Mouse button 2 down on pane. */
 		"bind -n MouseDown2Pane { select-pane -t=; if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' { send -M } { paste -p } }",
@@ -458,7 +459,7 @@ key_bindings_init(void)
 		"bind -n MouseDrag1Border { resize-pane -M }",
 
 		/* Mouse button 1 down on status line. */
-		"bind -n MouseDown1Status { select-window -t= }",
+		"bind -n MouseDown1Status { switch-client -t= }",
 
 		/* Mouse wheel down on status line. */
 		"bind -n WheelDownStatus { next-window }",
@@ -492,6 +493,8 @@ key_bindings_init(void)
 		"bind -Tcopy-mode C-b { send -X cursor-left }",
 		"bind -Tcopy-mode C-g { send -X clear-selection }",
 		"bind -Tcopy-mode C-k { send -X copy-pipe-end-of-line-and-cancel }",
+		"bind -Tcopy-mode C-l { send -X cursor-centre-vertical }",
+		"bind -Tcopy-mode M-l { send -X cursor-centre-horizontal }",
 		"bind -Tcopy-mode C-n { send -X cursor-down }",
 		"bind -Tcopy-mode C-p { send -X cursor-up }",
 		"bind -Tcopy-mode C-r { command-prompt -T search -ip'(search up)' -I'#{pane_search_string}' { send -X search-backward-incremental -- '%%' } }",
