@@ -933,7 +933,7 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	wp = xcalloc(1, sizeof *wp);
 	wp->window = w;
 	wp->options = options_create(w->options);
-	wp->flags = (PANE_STYLECHANGED|PANE_THEMECHANGED);
+	wp->flags = PANE_STYLECHANGED;
 
 	wp->id = next_window_pane_id++;
 	RB_INSERT(window_pane_tree, &all_window_panes, wp);
@@ -1001,6 +1001,8 @@ window_pane_destroy(struct window_pane *wp)
 
 	if (event_initialized(&wp->resize_timer))
 		event_del(&wp->resize_timer);
+	if (event_initialized(&wp->sync_timer))
+		event_del(&wp->sync_timer);
 	TAILQ_FOREACH_SAFE(r, &wp->resize_queue, entry, r1) {
 		TAILQ_REMOVE(&wp->resize_queue, r, entry);
 		free(r);
@@ -1079,6 +1081,8 @@ window_pane_resize(struct window_pane *wp, u_int sx, u_int sy)
 
 	if (sx == wp->sx && sy == wp->sy)
 		return;
+
+	screen_write_stop_sync(wp);
 
 	r = xmalloc(sizeof *r);
 	r->sx = sx;
@@ -1941,6 +1945,8 @@ window_pane_get_theme(struct window_pane *wp)
 void
 window_pane_send_theme_update(struct window_pane *wp)
 {
+	enum client_theme	theme;
+
 	if (wp == NULL || window_pane_exited(wp))
 		return;
 	if (~wp->flags & PANE_THEMECHANGED)
@@ -1948,16 +1954,23 @@ window_pane_send_theme_update(struct window_pane *wp)
 	if (~wp->screen->mode & MODE_THEME_UPDATES)
 		return;
 
-	switch (window_pane_get_theme(wp)) {
+	theme = window_pane_get_theme(wp);
+	if (theme == wp->last_theme)
+		return;
+	wp->last_theme = theme;
+	wp->flags &= ~PANE_THEMECHANGED;
+
+	switch (theme) {
 	case THEME_LIGHT:
-		input_key_pane(wp, KEYC_REPORT_LIGHT_THEME, NULL);
+		log_debug("%s: %%%u light theme", __func__, wp->id);
+		bufferevent_write(wp->event, "\033[?997;2n", 9);
 		break;
 	case THEME_DARK:
-		input_key_pane(wp, KEYC_REPORT_DARK_THEME, NULL);
+		log_debug("%s: %%%u dark theme", __func__, wp->id);
+		bufferevent_write(wp->event, "\033[?997;1n", 9);
 		break;
 	case THEME_UNKNOWN:
+		log_debug("%s: %%%u unknown theme", __func__, wp->id);
 		break;
 	}
-
-	wp->flags &= ~PANE_THEMECHANGED;
 }

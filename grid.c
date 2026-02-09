@@ -235,7 +235,7 @@ grid_check_y(struct grid *gd, const char *from, u_int py)
 int
 grid_cells_look_equal(const struct grid_cell *gc1, const struct grid_cell *gc2)
 {
-	int flags1 = gc1->flags, flags2 = gc2->flags;;
+	int flags1 = gc1->flags, flags2 = gc2->flags;
 
 	if (gc1->fg != gc2->fg || gc1->bg != gc2->bg)
 		return (0);
@@ -361,9 +361,13 @@ grid_compare(struct grid *ga, struct grid *gb)
 static void
 grid_trim_history(struct grid *gd, u_int ny)
 {
+	u_int	remaining;
+
 	grid_free_lines(gd, 0, ny);
+	remaining = gd->hsize + gd->sy - ny;
 	memmove(&gd->linedata[0], &gd->linedata[ny],
-	    (gd->hsize + gd->sy - ny) * (sizeof *gd->linedata));
+	    remaining * (sizeof *gd->linedata));
+	memset(&gd->linedata[remaining], 0, ny * (sizeof *gd->linedata));
 }
 
 /*
@@ -371,14 +375,17 @@ grid_trim_history(struct grid *gd, u_int ny)
  * and shift up.
  */
 void
-grid_collect_history(struct grid *gd)
+grid_collect_history(struct grid *gd, int all)
 {
 	u_int	ny;
 
 	if (gd->hsize == 0 || gd->hsize < gd->hlimit)
 		return;
 
-	ny = gd->hlimit / 10;
+	if (all)
+		ny = gd->hsize - gd->hlimit;
+	else
+		ny = gd->hlimit / 10;
 	if (ny < 1)
 		ny = 1;
 	if (ny > gd->hsize)

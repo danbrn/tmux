@@ -956,6 +956,18 @@ window_copy_formats(struct window_mode_entry *wme, struct format_tree *ft)
 		format_add(ft, "selection_present", "0");
 	}
 
+	switch (data->selflag) {
+	case SEL_CHAR:
+		format_add(ft, "selection_mode", "char");
+		break;
+	case SEL_WORD:
+		format_add(ft, "selection_mode", "word");
+		break;
+	case SEL_LINE:
+		format_add(ft, "selection_mode", "line");
+		break;
+	}
+
 	format_add(ft, "search_present", "%d", data->searchmark != NULL);
 	format_add(ft, "search_timed_out", "%d", data->timeout);
 	if (data->searchcount != -1) {
@@ -1477,6 +1489,20 @@ window_copy_cmd_scroll_middle(struct window_copy_cmd_state *cs)
 
 	mid_value = (screen_size_y(&data->screen) - 1) / 2;
 	return (window_copy_cmd_scroll_to(cs, mid_value));
+}
+
+/* Scroll the pane to the mouse in the scrollbar. */
+static enum window_copy_cmd_action
+window_copy_cmd_scroll_to_mouse(struct window_copy_cmd_state *cs)
+{
+	struct window_mode_entry	*wme = cs->wme;
+	struct window_pane		*wp = wme->wp;
+	struct client			*c = cs->c;
+	struct mouse_event		*m = cs->m;
+	int				 scroll_exit = args_has(cs->wargs, 'e');
+
+	window_copy_scroll(wp, c->tty.mouse_slider_mpos, m->y, scroll_exit);
+	return (WINDOW_COPY_CMD_NOTHING);
 }
 
 /* Scroll line containing the cursor to the top. */
@@ -2682,6 +2708,11 @@ window_copy_cmd_refresh_from_pane(struct window_copy_cmd_state *cs)
 	data->backing = window_copy_clone_screen(&wp->base, &data->screen, NULL,
 	    NULL, wme->swp != wme->wp);
 
+	if (data->oy > screen_hsize(data->backing)) {
+		data->cy = 0;
+		data->oy = screen_hsize(data->backing);
+	}
+
 	window_copy_size_changed(wme);
 	return (WINDOW_COPY_CMD_REDRAW);
 }
@@ -3044,6 +3075,11 @@ static const struct {
 	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
 	  .f = window_copy_cmd_scroll_middle
 	},
+	{ .command = "scroll-to-mouse",
+	  .args = { "e", 0, 0, NULL },
+	  .clear = WINDOW_COPY_CMD_CLEAR_EMACS_ONLY,
+	  .f = window_copy_cmd_scroll_to_mouse
+	},
 	{ .command = "scroll-top",
 	  .args = { "", 0, 0, NULL },
 	  .clear = WINDOW_COPY_CMD_CLEAR_ALWAYS,
@@ -3206,6 +3242,15 @@ window_copy_command(struct window_mode_entry *wme, struct client *c,
 		window_pane_reset_mode(wp);
 	else if (action == WINDOW_COPY_CMD_REDRAW)
 		window_copy_redraw_screen(wme);
+	else if (action == WINDOW_COPY_CMD_NOTHING) {
+		/*
+		 * Nothing is not actually nothing - most commands at least
+		 * move the cursor (what would be the point of a command that
+		 * literally does nothing?) and in that case we need to redraw
+		 * the first line to update the indicator.
+		 */
+		window_copy_redraw_lines(wme, 0, 1);
+	}
 }
 
 static void
